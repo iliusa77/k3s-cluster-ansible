@@ -4,7 +4,6 @@
   become: true
   vars:
     user: vagrant
-    install_controllers: true
   tasks:
     - name: Install k3s server
       shell: "curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION={{ k3s_version }} sh -" 
@@ -52,6 +51,13 @@
       shell: echo 'alias k=\"kubectl\"' >> /home/{{ user }}/.bashrc
       tags: kubectl_alias
 
+- name: Install K8S Controllers
+  hosts: server
+  become: true
+  vars:
+    user: vagrant
+    install_controllers: true
+  tasks:
     - name: Install ArgoCD controller
       shell: |
         kubectl create namespace argocd
@@ -103,6 +109,45 @@
             tls:
               certResolver: default
       tags: argocd
+
+    - name: Download Helm command line tool
+      uri:
+        url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+        return_content: true
+      register: helm_installer
+      tags:
+        - helm
+
+    - name: Install Helm
+      command:
+        cmd: bash
+        stdin: "{{ helm_installer.content }}"
+        creates: /usr/local/bin/helm
+      environment:
+        DESIRED_VERSION: "{{ helm_version | default('') }}"
+      tags:
+        - helm
+
+    - name: Add ESO chart repo
+      kubernetes.core.helm_repository:
+        name: external-secrets
+        repo_url: "https://charts.external-secrets.io"
+      tags: 
+        - helm
+        - eso
+
+    - name: Deploy ESO Helm chart
+      kubernetes.core.helm:
+        name: external-secrets
+        chart_ref: external-secrets/external-secrets
+        release_namespace: external-secrets
+        create_namespace: true
+        kubeconfig: "/home/{{ user }}/.kube/config"
+        values:
+          installCRDs: false
+      tags: 
+        - helm
+        - eso
         
 
 - name: Setup K3S agent
