@@ -65,6 +65,14 @@ k3s-worker-node-1   Ready    <none>                 33m     v1.24.6+k3s1
 k3s-worker-node-2   Ready    <none>                 33m     v1.24.6+k3s1
 ```
 
+## Install K8S controllers
+
+*Deploy ArgoCD controller*
+
+```bash
+ansible-playbook -i inventory.yml install.yml -e k3s_version=v1.31.6+k3s1 --tags "argocd"
+```
+
 ## Upgrade
 
 ```bash
