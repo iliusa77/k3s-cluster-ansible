@@ -2,6 +2,9 @@
 - name: Setup K3S server
   hosts: server
   become: true
+  vars:
+    user: vagrant
+    install_controllers: true
   tasks:
     - name: Install k3s server
       shell: "curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION={{ k3s_version }} sh -" 
@@ -31,6 +34,76 @@
 
     - name: Change config permissions
       shell: sudo chmod a=r /etc/rancher/k3s/k3s.yaml
+
+    - name: Creates kubeconfig directory
+      file:
+        path: "/home/{{ user }}/.kube"
+        state: directory
+        owner: "{{ user }}"
+        group: "{{ user }}"
+
+    - name: Prepare kubeconfig for Lens
+      copy:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: "/home/{{ user }}/.kube/config"
+        remote_src: yes
+
+    - name: Kubectl alias
+      shell: echo 'alias k=\"kubectl\"' >> /home/{{ user }}/.bashrc
+      tags: kubectl_alias
+
+    - name: Install ArgoCD controller
+      shell: |
+        kubectl create namespace argocd
+        kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+      when: install_controllers == true
+      tags: argocd
+
+    - name: Install apt pre-requisites
+      apt:
+        name: python3-pip
+        state: present
+        update_cache: yes
+      tags: argocd
+
+    - name: Install kubernetes pre-requisites
+      pip:
+        name:
+          - pyyaml
+          - kubernetes
+      tags: argocd
+
+    - name: Deploy AgroCD IngressRoute
+      kubernetes.core.k8s:
+        kubeconfig: "/home/{{ user }}/.kube/config"
+        state: present
+        definition:
+          apiVersion: traefik.io/v1alpha1
+          kind: IngressRoute
+          metadata:
+            name: argocd-server
+            namespace: argocd
+          spec:
+            entryPoints:
+              - websecure
+            routes:
+              - kind: Rule
+                match: Host(`argocd.example.com`)
+                priority: 10
+                services:
+                  - name: argocd-server
+                    port: 80
+              - kind: Rule
+                match: Host(`argocd.example.com`) && Header(`Content-Type`, `application/grpc`)
+                priority: 11
+                services:
+                  - name: argocd-server
+                    port: 80
+                    scheme: h2c
+            tls:
+              certResolver: default
+      tags: argocd
+        
 
 - name: Setup K3S agent
   hosts: agent
