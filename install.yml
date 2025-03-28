@@ -207,6 +207,25 @@
         - argocd
         - argocd_ingressroute
 
+    - name: Copy ArgoCD ingress manifest
+      copy:
+        src: files/ingresses/{{ item }}
+        dest: /home/{{ user }}/{{ item }}
+      with_items:
+        - argocd_traefik_ingress.yaml
+      tags: 
+        - argocd
+        - argocd_ingress
+
+    - name: Deploy ArgoCD ingress resources 
+      become: false
+      shell: |
+        cd /home/{{ user }}/
+        cat argocd_traefik_ingress.yaml | envsubst | kubectl apply -f -
+      tags: 
+        - argocd
+        - argocd_ingress
+
     - name: Download Helm command line tool
       uri:
         url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
@@ -268,6 +287,7 @@
           -f /home/{{ user }}/prometheus/prometheus-values.yaml \
       tags: monitoring
 
+# Vault
     - name: Install jq for Vault unseal
       apt:
         name: jq
@@ -308,11 +328,28 @@
         VAULT_UNSEAL_KEY3=$(jq -r ".unseal_keys_b64[]" cluster-keys.json)
         kubectl exec vault-2 -n vault -- vault operator unseal $VAULT_UNSEAL_KEY3
 
-        kubectl exec -ti vault-1 -n vault -- vault operator raft join http://vault-0.vault-internal:8200
-        kubectl exec -ti vault-2 -n vault -- vault operator raft join http://vault-0.vault-internal:8200
+        # kubectl exec -ti vault-1 -n vault -- vault operator raft join http://vault-0.vault-internal:8200
+        # kubectl exec -ti vault-2 -n vault -- vault operator raft join http://vault-0.vault-internal:8200
       register: deploy_hashicorp_vault
       until: deploy_hashicorp_vault is not failed
       retries: 5
       delay: 3
       tags: vault
 
+# Traefik Dashboard
+    - name: Copy Traefik dashboard manifests
+      copy:
+        src: files/ingresses/{{ item }}
+        dest: /home/{{ user }}/{{ item }}
+      with_items:
+        - traefik-dashboard-service.yaml
+        - traefik-dashboard-ingress.yaml
+      tags: traefik_dashboard
+
+    - name: Deploy Traefik dashboard resources #Deshboard will be available by url http://traefik.local/dashboard/#/
+      become: false
+      shell: |
+        cd /home/{{ user }}/
+        cat traefik-dashboard-service.yaml | envsubst | kubectl apply -f -
+        cat traefik-dashboard-ingress.yaml | envsubst | kubectl apply -f -
+      tags: traefik_dashboard
