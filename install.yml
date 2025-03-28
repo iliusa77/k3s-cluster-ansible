@@ -269,3 +269,12 @@
           -f /home/{{ user }}/prometheus/prometheus-values.yaml \
       tags: monitoring
 
+    - name: Deploy Hashicorp Vault
+      become: false
+      shell: |
+        helm repo add hashicorp https://helm.releases.hashicorp.com
+        helm repo update hashicorp
+        kubectl create ns vault
+        helm upgrade --install vault --namespace=vault hashicorp/vault
+      tags: vault
+
