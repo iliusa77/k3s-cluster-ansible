@@ -263,9 +263,9 @@
 
         helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
         helm repo update prometheus-community
-        helm install prometheus prometheus-community/kube-prometheus-stack \
+        helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
           --namespace monitoring-system \
           --set grafana.adminPassword='6nppQ?yY9PjEgtyQU:VxB-k4PgCPrbkv' \
-          -f /home/{{ user }}/prometheus/prometheus-values.yaml
+          -f /home/{{ user }}/prometheus/prometheus-values.yaml \
       tags: monitoring
 

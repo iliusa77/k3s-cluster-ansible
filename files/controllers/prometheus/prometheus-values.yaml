@@ -10,6 +10,10 @@ prometheus:
     #    static_configs:
     #      - targets: ['rook-ceph-mgr.rook-ceph.svc.cluster.local:9283']
 grafana:
+  ingress:
+    enabled: true
+    hosts:
+      - grafana.local
   sidecar:
     datasources:
       enabled: true
