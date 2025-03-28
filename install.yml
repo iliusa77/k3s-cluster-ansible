@@ -245,3 +245,18 @@
       tags: 
         - helm
         - eso
+
+# Prometheus,Grafana,Loki stack for k8s cluster monitoring and logging
+    - name: Copy Prometheus manifests
+      copy:
+        src: files/controllers/prometheus
+        dest: /home/{{ user }}/
+      tags: prometheus
+
+    - name: Deploy Prometheus resources
+      shell: kubectl apply -f /home/{{ user }}/prometheus/{{ item }}
+      tags: prometheus
+      with_items:
+        - storageclass.yaml
+        - rbac-config.yaml
+
