@@ -307,6 +307,9 @@
           -format=json > cluster-keys.json
         VAULT_UNSEAL_KEY3=$(jq -r ".unseal_keys_b64[]" cluster-keys.json)
         kubectl exec vault-2 -n vault -- vault operator unseal $VAULT_UNSEAL_KEY3
+
+        kubectl exec -ti vault-1 -n vault -- vault operator raft join http://vault-0.vault-internal:8200
+        kubectl exec -ti vault-2 -n vault -- vault operator raft join http://vault-0.vault-internal:8200
       register: deploy_hashicorp_vault
       until: deploy_hashicorp_vault is not failed
       retries: 5
