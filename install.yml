@@ -241,7 +241,7 @@
         create_namespace: true
         kubeconfig: "/home/{{ user }}/.kube/config"
         values:
-          installCRDs: false
+          installCRDs: true
       tags: 
         - helm
         - eso
@@ -258,8 +258,7 @@
       shell: |
         helm repo add grafana https://grafana.github.io/helm-charts
         helm repo update grafana
-        kubectl create ns monitoring-system
-        helm upgrade --install loki --namespace=monitoring-system grafana/loki-stack
+        helm upgrade --install loki --namespace=monitoring-system grafana/loki-stack --create-namespace
 
         helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
         helm repo update prometheus-community
@@ -269,12 +268,48 @@
           -f /home/{{ user }}/prometheus/prometheus-values.yaml \
       tags: monitoring
 
+    - name: Install jq for Vault unseal
+      apt:
+        name: jq
+        state: present
+      tags: vault
+
     - name: Deploy Hashicorp Vault
       become: false
       shell: |
         helm repo add hashicorp https://helm.releases.hashicorp.com
         helm repo update hashicorp
-        kubectl create ns vault
-        helm upgrade --install vault --namespace=vault hashicorp/vault
+        helm upgrade --install vault hashicorp/vault \
+          --namespace=vault \
+          --create-namespace \
+          --set storageClassName=local-path \
+          --set='server.ha.enabled=true' \
+          --set='server.ha.raft.enabled=true'
+        
+        # Unseal
+        kubectl exec vault-0 -n vault -- vault operator init \
+          -key-shares=1 \
+          -key-threshold=1 \
+          -format=json > cluster-keys.json
+        VAULT_UNSEAL_KEY=$(jq -r ".unseal_keys_b64[]" cluster-keys.json)
+        kubectl exec vault-0 -n vault -- vault operator unseal $VAULT_UNSEAL_KEY
+
+        kubectl exec vault-1 -n vault -- vault operator init \
+          -key-shares=1 \
+          -key-threshold=1 \
+          -format=json > cluster-keys.json
+        VAULT_UNSEAL_KEY2=$(jq -r ".unseal_keys_b64[]" cluster-keys.json)
+        kubectl exec vault-1 -n vault -- vault operator unseal $VAULT_UNSEAL_KEY2
+
+        kubectl exec vault-2 -n vault -- vault operator init \
+          -key-shares=1 \
+          -key-threshold=1 \
+          -format=json > cluster-keys.json
+        VAULT_UNSEAL_KEY3=$(jq -r ".unseal_keys_b64[]" cluster-keys.json)
+        kubectl exec vault-2 -n vault -- vault operator unseal $VAULT_UNSEAL_KEY3
+      register: deploy_hashicorp_vault
+      until: deploy_hashicorp_vault is not failed
+      retries: 5
+      delay: 3
       tags: vault
 
