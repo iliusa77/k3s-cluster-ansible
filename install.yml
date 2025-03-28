@@ -247,16 +247,12 @@
         - eso
 
 # Prometheus,Grafana,Loki stack for k8s cluster monitoring and logging
-    - name: Copy Prometheus manifests
-      copy:
-        src: files/controllers/prometheus
-        dest: /home/{{ user }}/
-      tags: prometheus
-
-    - name: Deploy Prometheus resources
-      shell: kubectl apply -f /home/{{ user }}/prometheus/{{ item }}
-      tags: prometheus
-      with_items:
-        - storageclass.yaml
-        - rbac-config.yaml
+    - name: Deploy Grafana stack
+      become: false
+      shell: |
+        helm repo add grafana https://grafana.github.io/helm-charts
+        helm repo update grafana
+        kubectl create ns monitoring-system
+        helm upgrade --install loki --namespace=monitoring-system grafana/loki-stack
+      tags: monitoring
 
