@@ -1,0 +1,8 @@
+[Unit]
+Description=ChartMuseum systemd service unit file.
+
+[Service]
+ExecStart=/usr/local/bin/chartmuseum --debug --port=8080 --storage="local" --storage-local-rootdir="./chartstorage"
+
+[Install]
+WantedBy=multi-user.target
