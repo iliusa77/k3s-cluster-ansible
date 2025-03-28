@@ -247,12 +247,25 @@
         - eso
 
 # Prometheus,Grafana,Loki stack for k8s cluster monitoring and logging
-    - name: Deploy Grafana stack
+    - name: Prepare kubeconfig for Lens
+      copy:
+        src: files/controllers/prometheus
+        dest: "/home/{{ user }}/"
+      tags: monitoring
+
+    - name: Deploy Prometheus/Grafana stack
       become: false
       shell: |
         helm repo add grafana https://grafana.github.io/helm-charts
         helm repo update grafana
         kubectl create ns monitoring-system
         helm upgrade --install loki --namespace=monitoring-system grafana/loki-stack
+
+        helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+        helm repo update prometheus-community
+        helm install prometheus prometheus-community/kube-prometheus-stack \
+          --namespace monitoring-system \
+          --set grafana.adminPassword='6nppQ?yY9PjEgtyQU:VxB-k4PgCPrbkv' \
+          -f /home/{{ user }}/prometheus/prometheus-values.yaml
       tags: monitoring
 
