@@ -91,13 +91,39 @@
         dest: /etc/systemd/system/chartmuseum.service
       tags: chartmuseum
 
-    - name: Start service chartmuseum
+    - name: Start service ChartMuseum
       systemd_service:
         state: started
         daemon_reload: true
         name: chartmuseum
       tags: chartmuseum
-  
+
+    - name: Add demo chart in ChartMuseum
+      become: false
+      shell: |
+        mkdir /home/{{ user }}/chartmuseum
+        cd /home/{{ user }}/chartmuseum
+        helm create aloha-backend-chart
+        rm -rf aloha-backend-chart/templates/*
+        cat << EOF > aloha-backend-chart/templates/configmap.yaml
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: aloha-backend-config
+        data:
+          value: "some value"
+        EOF
+        echo 'subject: helm' >> aloha-backend-chart/values.yaml
+        cd ..
+        helm repo index chartmuseum --url http://{{ groups['server'] | join('[]') }}:8080
+        cd /home/{{ user }}/chartmuseum
+        curl --data-binary "@aloha-backend-chart-0.1.0.tgz" http://{{ groups['server'] | join('[]') }}:8080/api/charts
+        cd /tmp
+        sleep 60
+        wget http://192.168.56.10:8080/charts/aloha-backend-chart-0.1.0.tgz
+        tar -xvf aloha-backend-chart-0.1.0.tgz
+        helm install aloha-backend aloha-backend-chart/
+      tags: chartmuseum_demo_chart  
         
 
 - name: Setup K3S agent
