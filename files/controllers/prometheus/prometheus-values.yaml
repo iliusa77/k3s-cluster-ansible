@@ -11,7 +11,7 @@ prometheus:
     #      - targets: ['rook-ceph-mgr.rook-ceph.svc.cluster.local:9283']
 grafana:
   ingress:
-    enabled: true
+    enabled: false
     hosts:
       - grafana.local
   sidecar:

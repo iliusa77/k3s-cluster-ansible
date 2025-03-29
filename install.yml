@@ -73,13 +73,31 @@
       shell: echo 'alias ks=\"kubens\"' >> /home/{{ user }}/.bashrc
       tags: kubens
 
-    - name: Permisstions for /etc/rancher/k3s/k3s.yaml.lock
+    - name: Permisstions for /etc/rancher/k3s/k3s.yaml
       file:
-        path: /etc/rancher/k3s/k3s.yaml.lock
+        path: /etc/rancher/k3s/k3s.yaml
         mode: u=rw,g=r,o=r
       tags: 
         - kubectx
         - kubens
+
+    - name: Download Helm command line tool
+      uri:
+        url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+        return_content: true
+      register: helm_installer
+      tags:
+        - helm
+
+    - name: Install Helm
+      command:
+        cmd: bash
+        stdin: "{{ helm_installer.content }}"
+        creates: /usr/local/bin/helm
+      environment:
+        DESIRED_VERSION: "{{ helm_version | default('') }}"
+      tags:
+        - helm
 
     - name: Install ChartMuseum
       shell: curl https://raw.githubusercontent.com/helm/chartmuseum/main/scripts/get-chartmuseum | bash
@@ -122,8 +140,13 @@
         sleep 60
         wget http://192.168.56.10:8080/charts/aloha-backend-chart-0.1.0.tgz
         tar -xvf aloha-backend-chart-0.1.0.tgz
-        helm install aloha-backend aloha-backend-chart/
+        helm upgrade --install aloha-backend aloha-backend-chart/
       tags: chartmuseum_demo_chart  
+      register: add_chart_chartmuseum
+      until: add_chart_chartmuseum is not failed
+      retries: 5
+      delay: 3
+      ignore_errors: yes
         
 
 - name: Setup K3S agent
@@ -145,7 +168,8 @@
         state: restarted
         daemon_reload: true
         name: k3s-agent.service
-  
+
+# K8S controllers  
 - name: Install K8S Controllers
   hosts: server
   become: true
@@ -189,18 +213,11 @@
               - websecure
             routes:
               - kind: Rule
-                match: Host(`argocd.example.com`)
+                match: Host(`argocd.local`)
                 priority: 10
                 services:
                   - name: argocd-server
                     port: 80
-              - kind: Rule
-                match: Host(`argocd.example.com`) && Header(`Content-Type`, `application/grpc`)
-                priority: 11
-                services:
-                  - name: argocd-server
-                    port: 80
-                    scheme: h2c
             tls:
               certResolver: default
       tags: 
@@ -225,24 +242,6 @@
       tags: 
         - argocd
         - argocd_ingress
-
-    - name: Download Helm command line tool
-      uri:
-        url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
-        return_content: true
-      register: helm_installer
-      tags:
-        - helm
-
-    - name: Install Helm
-      command:
-        cmd: bash
-        stdin: "{{ helm_installer.content }}"
-        creates: /usr/local/bin/helm
-      environment:
-        DESIRED_VERSION: "{{ helm_version | default('') }}"
-      tags:
-        - helm
 
     - name: Add ESO chart repo
       kubernetes.core.helm_repository:
@@ -286,6 +285,25 @@
           --set grafana.adminPassword='6nppQ?yY9PjEgtyQU:VxB-k4PgCPrbkv' \
           -f /home/{{ user }}/prometheus/prometheus-values.yaml \
       tags: monitoring
+
+    - name: Copy Grafana ingress manifests
+      copy:
+        src: files/ingresses/{{ item }}
+        dest: /home/{{ user }}/{{ item }}
+      with_items:
+        - grafana_traefik_ingress.yaml
+      tags: 
+        - monitoring
+        - grafana_ingress
+
+    - name: Deploy Grafana ingress
+      become: false
+      shell: |
+        cd /home/{{ user }}/
+        kubectl apply -f grafana_traefik_ingress.yaml
+      tags: 
+        - monitoring
+        - grafana_ingress
 
 # Vault
     - name: Install jq for Vault unseal
